@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arivali Dialogue</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <button id="toggleSettings" class="icon-btn" title="Settings">☰</button>
+      <h1>Arivali</h1>
+      <span class="sub">two models, one conversation</span>
+    </div>
+    <div class="controls">
+      <span id="status" class="status idle">Idle</span>
+      <button id="startBtn" class="primary">Start</button>
+      <button id="pauseBtn" disabled>Pause</button>
+      <button id="clearBtn">Clear</button>
+      <button id="downloadBtn">Download .md</button>
+      <button id="toggleHistory" class="icon-btn" title="Saved runs">🕘</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside id="settings" class="panel settings open">
+      <section class="card">
+        <h2>Conversation</h2>
+        <label>Title
+          <input id="runTitle" type="text" placeholder="Untitled run">
+        </label>
+        <label>Starter prompt
+          <textarea id="starter" rows="5" placeholder="The first user message, sent to the side that starts."></textarea>
+        </label>
+        <div class="row">
+          <label>Starts
+            <select id="startSide">
+              <option value="A">Side A</option>
+              <option value="B">Side B</option>
+            </select>
+          </label>
+          <label>Max replies
+            <input id="maxTurns" type="number" min="1" max="500" value="10">
+          </label>
+          <label>Delay (ms)
+            <input id="delayMs" type="number" min="0" step="100" value="500">
+          </label>
+        </div>
+        <label class="check">
+          <input id="rememberKeys" type="checkbox" checked> Remember API keys in this browser
+        </label>
+        <label>Anthropic API key
+          <input id="anthropicKey" type="password" autocomplete="off" placeholder="sk-ant-…">
+        </label>
+        <label>OpenAI API key
+          <input id="openaiKey" type="password" autocomplete="off" placeholder="sk-…">
+        </label>
+        <p class="hint">Keys go straight from your browser to the provider. They are kept only in this browser's local storage, and only if the box above is checked.</p>
+      </section>
+
+      <section class="card side-card" data-side="A"></section>
+      <section class="card side-card" data-side="B"></section>
+    </aside>
+
+    <main id="transcript" class="transcript">
+      <div class="empty">
+        <p>Open settings (☰), pick a model for each side, paste your keys and a starter prompt, then press <b>Start</b>.</p>
+      </div>
+    </main>
+
+    <aside id="history" class="panel history">
+      <h2>Saved runs</h2>
+      <ul id="runList"></ul>
+    </aside>
+  </div>
+
+  <template id="sideTemplate">
+    <h2 class="side-title"></h2>
+    <label>Display name
+      <input data-k="name" type="text">
+    </label>
+    <div class="row">
+      <label>Provider
+        <select data-k="provider">
+          <option value="anthropic">Anthropic</option>
+          <option value="openai">OpenAI</option>
+        </select>
+      </label>
+      <label>Model
+        <select data-k="model"></select>
+      </label>
+    </div>
+    <label class="custom-model hidden">Custom model ID
+      <input data-k="customModel" type="text" placeholder="model-id">
+    </label>
+    <label>System prompt
+      <textarea data-k="system" rows="4"></textarea>
+    </label>
+    <label>Max output tokens
+      <input data-k="maxTokens" type="number" min="256" step="256">
+    </label>
+
+    <fieldset class="prov anthropic">
+      <legend>Claude thinking</legend>
+      <div class="row">
+        <label>Thinking
+          <select data-k="aThinking">
+            <option value="summarized">On, show summary</option>
+            <option value="omitted">On, hidden</option>
+            <option value="off">Off (if model allows)</option>
+          </select>
+        </label>
+        <label>Effort
+          <select data-k="aEffort">
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="xhigh">xhigh</option>
+            <option value="max">max</option>
+          </select>
+        </label>
+      </div>
+      <label class="check">
+        <input data-k="aFallback" type="checkbox"> Server-side refusal fallback
+      </label>
+      <p class="hint">Opus 5.5 and Fable can't turn thinking off, so "Off" hides it and you lower effort instead. On Sonnet 5.5, "Off" keeps effort at high or below.</p>
+    </fieldset>
+
+    <fieldset class="prov openai">
+      <legend>GPT reasoning</legend>
+      <div class="row">
+        <label>Effort
+          <select data-k="oEffort">
+            <option value="">default</option>
+            <option value="none">none</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="xhigh">xhigh</option>
+          </select>
+        </label>
+        <label>Summary
+          <select data-k="oSummary">
+            <option value="auto">auto</option>
+            <option value="concise">concise</option>
+            <option value="detailed">detailed</option>
+            <option value="off">off</option>
+          </select>
+        </label>
+        <label>Verbosity
+          <select data-k="oVerbosity">
+            <option value="">default</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+          </select>
+        </label>
+      </div>
+      <p class="hint">GPT-6 Astra doesn't accept effort "none"; use "low" there.</p>
+    </fieldset>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
