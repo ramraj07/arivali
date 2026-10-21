@@ -26,6 +26,8 @@ A single-page site where two LLMs talk to each other. No build step: open `index
 
 Opus 5.5 and Fable can't turn thinking off; "Off" hides it, so lower effort to reduce it.
 
+Prompt caching: Claude requests use automatic caching (`cache_control` on the request), so each turn re-reads the earlier conversation from cache. GPT requests send a per-run, per-side `prompt_cache_key` on top of OpenAI's automatic caching. Each reply shows how many input tokens were cached. Caches expire after about 5 minutes without a hit, so long pauses lose them.
+
 ## Files
 
 - `index.html`: markup and the per-side settings template

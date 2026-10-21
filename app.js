@@ -280,7 +280,9 @@ function messageEl(msg, settings) {
 
 function setMeta(div, msg) {
   const parts = [`Side ${msg.side}`];
-  if (msg.usage) parts.push(`${msg.usage.output ?? '?'} out tok`);
+  const u = msg.usage;
+  if (u?.input != null) parts.push(u.cached ? `${u.input} in (${u.cached} cached)` : `${u.input} in`);
+  if (u) parts.push(`${u.output ?? '?'} out tok`);
   if (msg.stopReason && !['end_turn', 'completed'].includes(msg.stopReason)) parts.push(msg.stopReason);
   $('.meta', div).textContent = parts.join(' · ');
 }
@@ -399,6 +401,8 @@ async function callAnthropic(cfg, history, key, signal, ui) {
     messages,
     thinking,
     output_config: { effort },
+    // The history only grows at the end, so cache it up to the latest message.
+    cache_control: { type: 'ephemeral' },
   };
   if (cfg.system.trim()) body.system = cfg.system;
   const headers = {
@@ -422,7 +426,7 @@ async function callAnthropic(cfg, history, key, signal, ui) {
   for await (const { data } of readSSE(res)) {
     switch (data.type) {
       case 'message_start':
-        result.usage.input = data.message?.usage?.input_tokens;
+        setAnthropicUsage(result.usage, data.message?.usage);
         if (data.message?.model) result.servedModel = data.message.model;
         break;
       case 'content_block_start': {
@@ -449,7 +453,7 @@ async function callAnthropic(cfg, history, key, signal, ui) {
       }
       case 'message_delta':
         if (data.delta?.stop_reason) result.stopReason = data.delta.stop_reason;
-        if (data.usage?.output_tokens != null) result.usage.output = data.usage.output_tokens;
+        setAnthropicUsage(result.usage, data.usage);
         break;
       case 'error':
         throw new Error(data.error?.message || 'Stream error');
@@ -460,13 +464,26 @@ async function callAnthropic(cfg, history, key, signal, ui) {
   return result;
 }
 
+// Normalizes to { input (all prompt tokens), cached, output }. input_tokens
+// excludes cache reads and writes, so add them back for the total.
+function setAnthropicUsage(usage, u) {
+  if (!u) return;
+  if (u.input_tokens != null) {
+    const read = u.cache_read_input_tokens || 0;
+    usage.input = u.input_tokens + read + (u.cache_creation_input_tokens || 0);
+    usage.cached = read;
+  }
+  if (u.output_tokens != null) usage.output = u.output_tokens;
+}
+
 // ---------- OpenAI (Responses API) ----------
 
-async function callOpenAI(cfg, history, key, signal, ui) {
+async function callOpenAI(cfg, history, key, signal, ui, cacheKey) {
   const body = {
     model: cfg.modelId,
     stream: true,
     store: false,
+    prompt_cache_key: cacheKey,
     max_output_tokens: cfg.maxTokens,
     input: history.map((h) => ({ role: h.role, content: h.text || '(empty)' })),
   };
@@ -503,7 +520,11 @@ async function callOpenAI(cfg, history, key, signal, ui) {
         result.stopReason = r.status === 'incomplete'
           ? `incomplete: ${r.incomplete_details?.reason || 'unknown'}`
           : 'completed';
-        result.usage = { input: r.usage?.input_tokens, output: r.usage?.output_tokens };
+        result.usage = {
+          input: r.usage?.input_tokens,
+          cached: r.usage?.input_tokens_details?.cached_tokens || 0,
+          output: r.usage?.output_tokens,
+        };
         break;
       }
       case 'response.failed':
@@ -638,7 +659,7 @@ async function turn(side, keys) {
   controller = new AbortController();
   try {
     const call = cfg.provider === 'anthropic' ? callAnthropic : callOpenAI;
-    const r = await call(cfg, historyFor(side), keys[cfg.provider], controller.signal, ui);
+    const r = await call(cfg, historyFor(side), keys[cfg.provider], controller.signal, ui, `arivali-${run.id}-${side}`);
     delete msg._closed;
     Object.assign(msg, {
       text: r.text,
