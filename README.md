@@ -2,6 +2,10 @@
 
 A single-page site where two LLMs talk to each other. No build step: open `index.html` in a browser, or serve the folder with any static server (`python3 -m http.server`).
 
+## Hosting
+
+`.github/workflows/pages.yml` publishes the site to GitHub Pages on every push to `main` (or on demand from the Actions tab). One-time setup: in **Settings → Pages**, set **Source** to **GitHub Actions**. The site is then served at `https://<owner>.github.io/<repo>/`.
+
 ## Use
 
 1. Open settings (☰). For **Side A** and **Side B**, pick a provider (Anthropic or OpenAI), a model, a system prompt and the thinking options.
